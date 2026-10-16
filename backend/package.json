@@ -1,0 +1,14 @@
+{
+  "name": "chat_puppy_backend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "chat_puppy 薄后端：信令代理 + Key 保护",
+  "scripts": {
+    "dev": "node --watch server.js",
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "ws": "^8.22.0"
+  }
+}
