@@ -8,7 +8,11 @@
 //  5. 输出端 AudioContext(24k) 播放 response.audio.delta
 //  6. server_vad 事件驱动状态机 + 打断
 
+import { Avatar } from "./avatar";
+
 const BACKEND_WS = "ws://localhost:8787/ws";
+
+const avatar = new Avatar(document.getElementById("avatar") as HTMLCanvasElement);
 
 // 音频参数：输入 16k，输出 24k（与阿里云约定一致）
 const INPUT_SAMPLE_RATE = 16000;
@@ -39,26 +43,33 @@ const log = (msg: string) => {
 
 // ---- 播放端 ----
 function ensureOutputCtx() {
-  if (!outputCtx) outputCtx = new AudioContext({ sampleRate: OUTPUT_SAMPLE_RATE });
+  if (!outputCtx) {
+    outputCtx = new AudioContext({ sampleRate: OUTPUT_SAMPLE_RATE });
+  }
+  // 浏览器自动播放策略：必须在用户手势后 resume，否则静音
+  if (outputCtx.state === "suspended") {
+    outputCtx.resume().catch(() => {});
+  }
   return outputCtx;
-}
-
-function bytesToArrayBuffer(b64: string): ArrayBuffer {
-  const bin = atob(b64);
-  const ab = new ArrayBuffer(bin.length);
-  const u8 = new Uint8Array(ab);
-  for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
-  return ab;
 }
 
 function playPcm(base64: string) {
   ensureOutputCtx();
-  const bytes = atob(base64);
-  const i16 = new Int16Array(bytes.length / 2);
-  const dv = new DataView(bytesToArrayBuffer(bytes));
-  for (let i = 0; i < i16.length; i++) i16[i] = dv.getInt16(i * 2, true);
+  // 用 Uint8Array 解码 base64（可靠，避免字符串编码歧义）
+  const bin = atob(base64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i) & 0xff;
+
+  // 实测：阿里云 response.audio.delta 是 16-bit 小端 PCM（虽然 session 报告 pcm24）
+  const i16 = new Int16Array(bytes.buffer, bytes.byteOffset, Math.floor(bytes.length / 2));
   const f32 = new Float32Array(i16.length);
-  for (let i = 0; i < f32.length; i++) f32[i] = i16[i] / 32768;
+  let sum = 0;
+  for (let i = 0; i < i16.length; i++) {
+    f32[i] = i16[i] / 32768;
+    sum += f32[i] * f32[i];
+  }
+  const rms = Math.sqrt(sum / Math.max(1, i16.length));
+  avatar.feedAudioRms(rms);
 
   playQueue.push(f32 as Float32Array<ArrayBuffer>);
   if (!playing) pumpQueue();
@@ -100,12 +111,12 @@ function sendSessionUpdate() {
       modalities: ["text", "audio"],
       input_audio_transcription: { model: "qwen3-asr-flash-realtime" },
       instructions:
-        "你是一只软萌治愈系的 Q 版小宠物，名叫「小趴」。说话温柔、爱撒娇、带一点可爱的语气词，用简短的中文回应，像朋友一样陪伴用户。",
+        "你是一只软萌治愈系的 Q 版小宠物，名叫「小趴」。说话温柔、爱撒娇，但要认真回应用户说话的内容，不要只是敷衍地‘嗯嗯’。用简短自然的中文回应，像朋友一样陪伴用户。每次都要接住用户的话。",
       turn_detection: {
         type: "server_vad",
         threshold: 0.5,
         prefix_padding_ms: 300,
-        silence_duration_ms: 700,
+        silence_duration_ms: 1200,
       },
       audio: {
         input: {
@@ -130,6 +141,7 @@ function handleEvent(obj: any) {
       break;
     case "input_audio_buffer.speech_started":
       log("🗣️ 用户开始说话");
+      avatar.setState("listening");
       if (aiSpeaking) {
         playQueue.length = 0;
         log("⏹️ 打断 AI 说话");
@@ -138,9 +150,11 @@ function handleEvent(obj: any) {
       break;
     case "input_audio_buffer.speech_stopped":
       log("🤐 用户停止说话");
+      avatar.setState("thinking");
       break;
     case "response.audio.delta":
       aiSpeaking = true;
+      avatar.setState("speaking");
       playPcm(obj.delta);
       break;
     case "response.audio_transcript.done":
@@ -149,6 +163,7 @@ function handleEvent(obj: any) {
     case "response.done":
       aiSpeaking = false;
       nextPlayTime = 0;
+      avatar.setState("idle");
       log("✅ 本轮完成");
       break;
     case "error":
@@ -192,6 +207,11 @@ async function start() {
   if (starting || ws) return;
   starting = true;
   try {
+    // 在用户点击手势内同步创建并激活 AudioContext（浏览器自动播放策略要求）
+    ensureOutputCtx();
+    if (outputCtx && outputCtx.state === "suspended") {
+      await outputCtx.resume();
+    }
     log("🚀 正在连接...");
     ws = new WebSocket(BACKEND_WS);
     ws.onopen = () => log("🔌 WebSocket 已连接（隧道）");

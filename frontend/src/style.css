@@ -32,6 +32,16 @@ h1 {
   margin-bottom: 16px;
 }
 
+#avatar {
+  display: block;
+  margin: 0 auto 16px;
+  width: 320px;
+  height: 320px;
+  border-radius: 16px;
+  background: #2a2a45;
+  box-shadow: 0 4px 20px rgba(255, 158, 205, 0.15);
+}
+
 button {
   padding: 10px 20px;
   border: none;
