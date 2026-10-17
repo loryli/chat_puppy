@@ -1,0 +1,7 @@
+- generic [ref=e2]:
+  - banner [ref=e3]: 🐾 chat_puppy
+  - main [ref=e4]:
+    - generic [ref=e6]: 待机中
+  - contentinfo [ref=e7]:
+    - button "🎤 开始对话" [ref=e8]
+    - button "⏹ 停止" [disabled] [ref=e9]

@@ -1,82 +1,267 @@
+:root {
+  /* 奶油白 / 浅粉 / 淡紫 辅助配色 */
+  --bg-top: #fdf6f0;
+  --bg-bottom: #f6e9f5;
+  --card: #ffffff;
+  --accent: #ff8fb8;
+  --accent-soft: #ffd6e8;
+  --purple: #c9b8e8;
+  --text: #5a4a5a;
+  --text-dim: #a89aa8;
+  --border: #f0e2e8;
+  --shadow: 0 10px 30px rgba(180, 140, 160, 0.18);
+  --shadow-sm: 0 4px 12px rgba(180, 140, 160, 0.14);
+}
+
 * {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
 }
 
+html,
 body {
-  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
-  background: #1a1a2e;
-  color: #eee;
-  min-height: 100vh;
+  height: 100%;
+}
+
+body {
+  font-family: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  background: linear-gradient(180deg, var(--bg-top) 0%, var(--bg-bottom) 100%);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+}
+
+#app {
+  height: 100vh;
+  min-height: 560px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 0 20px;
+}
+
+/* ===== 顶部品牌区 ===== */
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 28px 0 8px;
+  user-select: none;
+}
+
+.brand-icon {
+  font-size: 1.6rem;
+  filter: drop-shadow(0 2px 3px rgba(255, 143, 184, 0.3));
+}
+
+.brand-name {
+  font-size: 1.35rem;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  background: linear-gradient(135deg, #ff8fb8, #b8a0e0);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* ===== 中央角色展示区 ===== */
+.stage {
+  position: relative;
+  flex: 1;
+  width: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
-#app {
-  width: 100%;
-  max-width: 640px;
-  padding: 24px;
-}
-
-h1 {
-  font-size: 1.4rem;
-  margin-bottom: 16px;
-  color: #ff9ecd;
-}
-
-.controls {
-  display: flex;
-  gap: 12px;
-  margin-bottom: 16px;
-}
-
 #avatar {
   display: block;
-  margin: 0 auto 16px;
-  width: 320px;
-  height: 320px;
-  border-radius: 16px;
-  background: #2a2a45;
-  box-shadow: 0 4px 20px rgba(255, 158, 205, 0.15);
+  width: min(48vh, 360px);
+  height: min(48vh, 360px);
+  margin: 0 auto;
+  /* 柔和的圆形展示区域，弱化图片背景边界 */
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 42%, #fff 0%, #fdeef4 70%, #fbe4ee 100%);
+  box-shadow: var(--shadow);
+  cursor: pointer;
 }
 
-button {
-  padding: 10px 20px;
+/* ===== 对话气泡 ===== */
+.bubble {
+  position: absolute;
+  top: 2%;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: 76%;
+  padding: 13px 20px;
+  background: var(--card);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  font-size: 1.02rem;
+  line-height: 1.6;
+  box-shadow: var(--shadow-sm);
+  z-index: 10;
+  animation: bubble-in 0.28s ease-out;
+}
+
+.bubble::after {
+  content: "";
+  position: absolute;
+  bottom: -8px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 9px solid transparent;
+  border-right: 9px solid transparent;
+  border-top: 9px solid var(--card);
+}
+
+.bubble.hidden {
+  display: none;
+}
+
+@keyframes bubble-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+/* ===== 状态徽章 ===== */
+.status {
+  position: absolute;
+  bottom: 4%;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 6px 18px;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  color: var(--text-dim);
+  background: var(--card);
+  border: 1px solid var(--border);
+  white-space: nowrap;
+  transition: color 0.2s, background 0.2s, border-color 0.2s;
+}
+
+.status.active {
+  color: #e8759f;
+  background: #fff0f6;
+  border-color: #ffd6e8;
+}
+
+/* ===== 底部交互控制区 ===== */
+.toolbar {
+  display: flex;
+  gap: 14px;
+  padding: 16px 0 32px;
+  width: 100%;
+  justify-content: center;
+}
+
+.btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 13px 28px;
   border: none;
-  border-radius: 8px;
-  cursor: pointer;
+  border-radius: 999px;
   font-size: 1rem;
   font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.12s ease, box-shadow 0.12s ease, opacity 0.2s;
 }
 
-#start {
-  background: #ff9ecd;
-  color: #1a1a2e;
+.btn-icon {
+  font-size: 1.1rem;
 }
 
-#stop {
-  background: #444;
-  color: #ddd;
+/* 主按钮：开始对话 */
+.btn-primary {
+  background: linear-gradient(135deg, #ff8fb8, #ff6fa5);
+  color: #fff;
+  box-shadow: 0 6px 16px rgba(255, 143, 184, 0.4);
+  min-width: 170px;
 }
 
-button:hover {
-  opacity: 0.85;
+.btn-primary:hover {
+  box-shadow: 0 8px 20px rgba(255, 143, 184, 0.5);
+  transform: translateY(-1px);
 }
 
-#log {
-  background: #0f0f1f;
-  border-radius: 8px;
-  padding: 14px;
-  height: 400px;
-  overflow-y: auto;
-  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
-  font-size: 0.82rem;
-  line-height: 1.6;
+.btn-primary:active {
+  transform: translateY(0) scale(0.97);
 }
 
-#log div {
-  color: #9fe0a9;
-  word-break: break-all;
+/* 次按钮：停止 */
+.btn-secondary {
+  background: var(--card);
+  color: var(--text-dim);
+  border: 1px solid var(--border);
+  min-width: 120px;
+}
+
+.btn-secondary:hover:not(:disabled) {
+  color: #e8759f;
+  border-color: #ffd6e8;
+}
+
+.btn-secondary:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+/* 禁用状态 */
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+/* 主按钮在对话中变绿（由 JS 添加 .listening 类） */
+.btn-primary.listening {
+  background: linear-gradient(135deg, #7ed9a7, #4fc48a);
+  box-shadow: 0 6px 16px rgba(79, 196, 138, 0.4);
+}
+
+/* ===== 响应式 ===== */
+@media (max-width: 520px) {
+  .brand {
+    padding-top: 18px;
+  }
+
+  .brand-name {
+    font-size: 1.15rem;
+  }
+
+  .brand-icon {
+    font-size: 1.3rem;
+  }
+
+  #avatar {
+    width: min(42vh, 280px);
+    height: min(42vh, 280px);
+  }
+
+  .btn {
+    padding: 12px 22px;
+    font-size: 0.95rem;
+    min-width: 0;
+  }
+
+  .btn-primary {
+    min-width: 140px;
+  }
+
+  .toolbar {
+    gap: 10px;
+    padding-bottom: 20px;
+  }
 }

@@ -9,6 +9,7 @@
 //  6. server_vad 事件驱动状态机 + 打断
 
 import { Avatar } from "./avatar";
+import "./style.css";
 
 const BACKEND_WS = "ws://localhost:8787/ws";
 
@@ -32,14 +33,44 @@ const playQueue: Float32Array<ArrayBuffer>[] = [];
 let playing = false;
 let nextPlayTime = 0;
 
-const log = (msg: string) => {
-  const el = document.getElementById("log");
-  if (!el) return;
-  const line = document.createElement("div");
-  line.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
-  el.appendChild(line);
-  el.scrollTop = el.scrollHeight;
-};
+// ---- UI 元素 ----
+const bubbleEl = document.getElementById("bubble") as HTMLDivElement;
+const statusEl = document.getElementById("status") as HTMLDivElement;
+const startBtn = document.getElementById("start") as HTMLButtonElement;
+const stopBtn = document.getElementById("stop") as HTMLButtonElement;
+
+let bubbleTimer = 0;
+
+// 显示对话气泡（AI 的回复文字）
+function showBubble(text: string) {
+  if (!text) return;
+  bubbleEl.textContent = text;
+  bubbleEl.classList.remove("hidden");
+  // 一段时间后自动隐藏（避免一直遮挡角色）
+  clearTimeout(bubbleTimer);
+  bubbleTimer = window.setTimeout(() => {
+    bubbleEl.classList.add("hidden");
+  }, 6000);
+}
+
+// 设置状态徽章
+function setStatus(text: string, active = false) {
+  statusEl.textContent = text;
+  statusEl.classList.toggle("active", active);
+}
+
+// 切换「开始/停止」按钮的可用状态（开始=主按钮，停止=次按钮）
+function setListening(on: boolean) {
+  if (on) {
+    startBtn.disabled = true;
+    startBtn.classList.add("listening");
+    stopBtn.disabled = false;
+  } else {
+    startBtn.disabled = false;
+    startBtn.classList.remove("listening");
+    stopBtn.disabled = true;
+  }
+}
 
 // ---- 播放端 ----
 function ensureOutputCtx() {
@@ -133,41 +164,42 @@ function handleEvent(obj: any) {
   const t = obj?.type;
   switch (t) {
     case "session.created":
-      log("✅ 会话已建立，配置参数...");
+      setStatus("连接中…");
       sendSessionUpdate();
       break;
     case "session.updated":
-      log("✅ 参数已生效，可以开始说话了！");
+      setStatus("待机中", false);
       break;
     case "input_audio_buffer.speech_started":
-      log("🗣️ 用户开始说话");
+      setStatus("聆听着…", true);
       avatar.setState("listening");
       if (aiSpeaking) {
         playQueue.length = 0;
-        log("⏹️ 打断 AI 说话");
         send({ type: "response.cancel" });
       }
       break;
     case "input_audio_buffer.speech_stopped":
-      log("🤐 用户停止说话");
+      setStatus("思考中…", true);
       avatar.setState("thinking");
       break;
     case "response.audio.delta":
       aiSpeaking = true;
+      setStatus("说话中…", true);
       avatar.setState("speaking");
       playPcm(obj.delta);
       break;
     case "response.audio_transcript.done":
-      log(`💬 AI: ${obj.transcript}`);
+      showBubble(obj.transcript);
       break;
     case "response.done":
       aiSpeaking = false;
       nextPlayTime = 0;
+      setStatus("待机中", false);
       avatar.setState("idle");
-      log("✅ 本轮完成");
       break;
     case "error":
-      log(`❌ 错误: ${JSON.stringify(obj.error || obj)}`);
+      setStatus("出错了", false);
+      showBubble("小趴有点卡住了…");
       break;
   }
 }
@@ -199,7 +231,6 @@ async function setupMic() {
       send({ type: "input_audio_buffer.append", audio: btoa(bin) });
     }
   };
-  log("🎤 麦克风就绪");
 }
 
 // ---- 开始/停止 ----
@@ -207,20 +238,23 @@ async function start() {
   if (starting || ws) return;
   starting = true;
   try {
-    // 在用户点击手势内同步创建并激活 AudioContext（浏览器自动播放策略要求）
     ensureOutputCtx();
     if (outputCtx && outputCtx.state === "suspended") {
       await outputCtx.resume();
     }
-    log("🚀 正在连接...");
+    setStatus("连接中…", true);
     ws = new WebSocket(BACKEND_WS);
-    ws.onopen = () => log("🔌 WebSocket 已连接（隧道）");
+    ws.onopen = () => setStatus("待机中", false);
     ws.onmessage = (e) => {
       try { handleEvent(JSON.parse(e.data)); } catch {}
     };
-    ws.onclose = () => log("🔴 连接关闭");
-    ws.onerror = () => log("❌ 连接错误");
+    ws.onclose = () => {
+      setStatus("已断开", false);
+      setListening(false);
+    };
+    ws.onerror = () => setStatus("连接出错", false);
     await setupMic();
+    setListening(true);
   } finally {
     starting = false;
   }
@@ -239,11 +273,20 @@ function stop() {
   playing = false;
   aiSpeaking = false;
   nextPlayTime = 0;
-  // 不关闭 AudioContext，保持 worklet 已注册状态，下次 start 直接复用
-  log("🛑 已停止");
+  avatar.setState("idle");
+  setStatus("待机中", false);
+  setListening(false);
 }
 
-// ---- UI ----
-(document.getElementById("start") as HTMLButtonElement).onclick = () =>
-  start().catch((e) => log(`❌ ${e}`));
-(document.getElementById("stop") as HTMLButtonElement).onclick = stop;
+// ---- UI 绑走 ----
+startBtn.onclick = () => {
+  start().catch(() => {
+    setStatus("启动失败", false);
+    setListening(false);
+  });
+};
+
+stopBtn.onclick = () => {
+  stop();
+};
+

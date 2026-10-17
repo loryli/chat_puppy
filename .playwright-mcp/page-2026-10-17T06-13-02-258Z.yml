@@ -1,0 +1,14 @@
+- generic [ref=f7e2]:
+  - banner [ref=f7e3]:
+    - generic [ref=f7e4]: 🐾
+    - generic [ref=f7e5]: chat_puppy
+  - main [ref=f7e6]:
+    - generic [ref=f7e7] [cursor=pointer]
+    - generic [ref=f7e8]: 待机中
+  - contentinfo [ref=f7e9]:
+    - button "🎤 开始对话" [ref=f7e10] [cursor=pointer]:
+      - generic [ref=f7e11]: 🎤
+      - generic [ref=f7e12]: 开始对话
+    - button "⏹ 停止" [disabled] [ref=f7e13]:
+      - generic [ref=f7e14]: ⏹
+      - generic [ref=f7e15]: 停止

@@ -3,17 +3,39 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>chat_puppy</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <title>chat_puppy · 小趴</title>
   </head>
   <body>
     <div id="app">
-      <h1>🐾 chat_puppy</h1>
-      <canvas id="avatar" width="320" height="320"></canvas>
-      <div class="controls">
-        <button id="start">🎤 开始对话</button>
-        <button id="stop">🛑 停止</button>
-      </div>
-      <div id="log"></div>
+      <!-- 顶部品牌区 -->
+      <header class="brand">
+        <span class="brand-icon">🐾</span>
+        <span class="brand-name">chat_puppy</span>
+      </header>
+
+      <!-- 中央角色展示区 -->
+      <main class="stage">
+        <canvas id="avatar" width="340" height="340"></canvas>
+
+        <!-- 对话气泡（浮在角色上方） -->
+        <div id="bubble" class="bubble hidden"></div>
+
+        <!-- 状态徽章 -->
+        <div id="status" class="status">待机中</div>
+      </main>
+
+      <!-- 底部交互控制区 -->
+      <footer class="toolbar">
+        <button id="start" class="btn btn-primary">
+          <span class="btn-icon">🎤</span>
+          <span>开始对话</span>
+        </button>
+        <button id="stop" class="btn btn-secondary" disabled>
+          <span class="btn-icon">⏹</span>
+          <span>停止</span>
+        </button>
+      </footer>
     </div>
     <script type="module" src="/src/main.ts"></script>
   </body>
