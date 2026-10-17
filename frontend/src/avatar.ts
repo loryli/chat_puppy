@@ -1,15 +1,34 @@
-// avatar.ts —— 2D Q版角色「小趴」：加载外部图片 + 状态动效 + 鼠标交互
+// avatar.ts —— 2D Q版角色「小趴」：多表情图片 + 状态动效 + 鼠标交互
 //
-// 图片来自 frontend/public/character.png（Q版贴纸风格，实色背景）
-// 效果（第一步，无需五官坐标）：
-//   - 待机：轻微上下浮动 + 微倾斜（呼吸）
-//   - 聆听：轻微放大 + 音符/波纹提示
-//   - 说话：轻微缩放 + 上下浮动 + 语音波形
-//   - 点击：轻轻弹跳
-//   - 思考：可爱思考气泡（省略号）
-//   - 鼠标视线：角色整体轻微朝鼠标方向倾斜（代替眼球跟随）
+// 表情图片来自 frontend/public/expressions/（同一 Q 版角色的不同表情）
+// 状态 → 表情映射：
+//   idle → happy，listening → listening，thinking → smug，speaking → excited
+// 其余表情（angry/blushing/crying/sleepy/surprised）作为预留资源。
 
-export type AvatarState = "idle" | "listening" | "thinking" | "speaking";
+export type AvatarState =
+  | "idle"
+  | "listening"
+  | "thinking"
+  | "speaking"
+  // 预留情绪状态（尚未接入语音链路，可用 setState 手动触发）
+  | "happy"
+  | "surprised"
+  | "sleepy"
+  | "sad"
+  | "angry";
+
+// 状态 → 表情图片的映射（核心 4 态 + 预留 5 态）
+const EXPRESSION_MAP: Record<AvatarState, string> = {
+  idle: "happy",
+  listening: "listening",
+  thinking: "smug",
+  speaking: "excited",
+  happy: "happy",
+  surprised: "surprised",
+  sleepy: "sleepy",
+  sad: "crying",
+  angry: "angry",
+};
 
 interface MousePos {
   x: number;
@@ -25,9 +44,9 @@ export class Avatar {
   private W = 512;
   private H = 512;
 
-  // 图片
-  private img: HTMLImageElement | null = null;
-  private imgLoaded = false;
+  // 图片缓存：所有表情图
+  private images: Record<string, HTMLImageElement> = {};
+  private loaded = false;
 
   private time = 0;
   private raf = 0;
@@ -44,13 +63,18 @@ export class Avatar {
     this.canvas = canvas;
     this.ctx = canvas.getContext("2d")!;
 
-    // 加载角色图片
-    const image = new Image();
-    image.onload = () => {
-      this.img = image;
-      this.imgLoaded = true;
-    };
-    image.src = "/character.png";
+    // 预加载所有表情图
+    const names = [...new Set(Object.values(EXPRESSION_MAP))];
+    let pending = names.length;
+    names.forEach((name) => {
+      const img = new Image();
+      img.onload = () => {
+        pending--;
+        if (pending <= 0) this.loaded = true;
+      };
+      img.src = `/expressions/${name}.png`;
+      this.images[name] = img;
+    });
 
     // 鼠标交互
     canvas.addEventListener("mousemove", (e) => {
@@ -173,9 +197,13 @@ export class Avatar {
   }
 
   private drawImage() {
-    if (!this.imgLoaded || !this.img) {
+    const ctx = this.ctx;
+    // 根据当前状态取对应表情图
+    const name = EXPRESSION_MAP[this.state];
+    const img = this.images[name];
+
+    if (!img || !img.complete || !this.loaded) {
       // 未加载时画占位
-      const ctx = this.ctx;
       ctx.fillStyle = "rgba(255,255,255,0.1)";
       ctx.beginPath();
       ctx.arc(0, 0, 60, 0, Math.PI * 2);
@@ -183,18 +211,17 @@ export class Avatar {
       return;
     }
 
-    const ctx = this.ctx;
-    const iw = this.img.width;
-    const ih = this.img.height;
+    const iw = img.width;
+    const ih = img.height;
 
-    // object-fit: contain —— 等比缩放到逻辑画布内，留少量边距（贴纸留白）
+    // object-fit: contain —— 等比缩放到逻辑画布内，留少量边距
     const maxW = this.W * 0.86;
     const maxH = this.H * 0.86;
     const scale = Math.min(maxW / iw, maxH / ih);
     const dw = iw * scale;
     const dh = ih * scale;
 
-    ctx.drawImage(this.img, -dw / 2, -dh / 2, dw, dh);
+    ctx.drawImage(img, -dw / 2, -dh / 2, dw, dh);
   }
 
   private drawEffects(cx: number, cy: number) {

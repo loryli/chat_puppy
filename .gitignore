@@ -7,5 +7,14 @@ dist/
 # Playwright MCP 调试产物
 .playwright-mcp/
 
+# Playwright 截图（根目录）
+check-frontend.png
+frontend-after-fix.png
+settings-check.png
+expression-idle.png
+
 # 原始角色图（前端实际用 frontend/public/character.png）
 q版👤.png
+
+# 原始表情资源（前端实际用 frontend/public/expressions/）
+资源文件/
