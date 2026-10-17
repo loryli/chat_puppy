@@ -22,6 +22,53 @@ import {
 
 const BACKEND_WS = "ws://localhost:8787/ws";
 
+// ---- 音色列表（qwen3.8-omni-flash-realtime 支持的中文萌系音色精选）----
+const VOICES = [
+  { value: "Tina", label: "甜甜（默认）" },
+  { value: "Momo", label: "茉兔（撒娇）" },
+  { value: "Cici", label: "绵绵（软糯）" },
+  { value: "Qiao", label: "小乔妹（甜妹）" },
+  { value: "Mia", label: "舒然（温柔）" },
+  { value: "Serena", label: "苏瑶（温柔姐）" },
+  { value: "Evan", label: "江晨（年下男）" },
+  { value: "Cherry", label: "芊悦（阳光）" },
+  { value: "Kiki", label: "粤语阿清" },
+  { value: "Sunny", label: "四川晴儿" },
+];
+
+// ---- 人设预设 ----
+const PERSONAS: Record<string, string> = {
+  cute:
+    "你是一只软萌治愈系的 Q 版小宠物，名叫「小趴」。说话温柔、爱撒娇，但要认真回应用户说话的内容，不要只是敷衍地‘嗯嗯’。用简短自然的中文回应，像朋友一样陪伴用户。每次都要接住用户的话。",
+  energetic:
+    "你是一只元气活泼的 Q 版小宠物，名叫「小趴」。性格开朗话痨，充满活力，喜欢用感叹号和 emoji，说话鲜活有趣，总能带动气氛，让用户开心起来。",
+  tsundere:
+    "你是一只傲娇的 Q 版小宠物，名叫「小趴」。表面嘴硬傲娇、动不动就‘哼’，但内心其实很关心用户，偶尔会红着脸说真心话。保持可爱，不要真的伤对方的心。",
+};
+
+const DEFAULT_VOICE = "Tina";
+const DEFAULT_PERSONA_KEY = "cute";
+
+// ---- 设置（localStorage 持久化）----
+function loadSetting<T>(key: string, fallback: T): T {
+  try {
+    const v = localStorage.getItem(key);
+    return v ? (JSON.parse(v) as T) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function saveSetting(key: string, value: unknown) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch {}
+}
+
+let currentVoice = loadSetting<string>("voice", DEFAULT_VOICE);
+let currentPersona =
+  loadSetting<string>("persona", "") || PERSONAS[DEFAULT_PERSONA_KEY];
+
 const avatar = new Avatar(document.getElementById("avatar") as HTMLCanvasElement);
 
 // 音频参数：输入 16k，输出 24k（与阿里云约定一致）
@@ -152,8 +199,7 @@ function send(obj: unknown) {
 
 // ---- 会话配置 ----
 function sendSessionUpdate() {
-  const baseInstructions =
-    "你是一只软萌治愈系的 Q 版小宠物，名叫「小趴」。说话温柔、爱撒娇，但要认真回应用户说话的内容，不要只是敷衍地‘嗯嗯’。用简短自然的中文回应，像朋友一样陪伴用户。每次都要接住用户的话。";
+  const baseInstructions = currentPersona || PERSONAS[DEFAULT_PERSONA_KEY];
 
   // 把历史记忆拼进 instructions
   const memoryCtx = buildMemoryContext(summary, recentTurns);
@@ -177,7 +223,7 @@ function sendSessionUpdate() {
         input: {
           format: { type: "pcm", sample_rate: 16000, sample_format: "s16le", channels: 1, packing: "interleaved", channel_layout: "mono" },
         },
-        output: { voice: "Tina", format: { type: "pcm", sample_rate: 24000 } },
+        output: { voice: currentVoice, format: { type: "pcm", sample_rate: 24000 } },
       },
     },
   });
@@ -366,6 +412,97 @@ startBtn.onclick = () => {
 
 stopBtn.onclick = () => {
   stop();
+};
+
+// ===== 设置面板 =====
+const settingsBtn = document.getElementById("settings-btn") as HTMLButtonElement;
+const settingsPanel = document.getElementById("settings-panel") as HTMLElement;
+const settingsOverlay = document.getElementById("settings-overlay") as HTMLElement;
+const settingsClose = document.getElementById("settings-close") as HTMLButtonElement;
+const voiceSelect = document.getElementById("voice-select") as HTMLSelectElement;
+const personaInput = document.getElementById("persona-input") as HTMLTextAreaElement;
+const clearMemoryBtn = document.getElementById("clear-memory") as HTMLButtonElement;
+
+function openSettings() {
+  settingsPanel.classList.remove("hidden");
+  settingsOverlay.classList.remove("hidden");
+}
+
+function closeSettings() {
+  settingsPanel.classList.add("hidden");
+  settingsOverlay.classList.add("hidden");
+}
+
+// 初始化音色下拉
+VOICES.forEach((v) => {
+  const opt = document.createElement("option");
+  opt.value = v.value;
+  opt.textContent = v.label;
+  if (v.value === currentVoice) opt.selected = true;
+  voiceSelect.appendChild(opt);
+});
+
+// 初始化人设输入框 + 高亮当前预设
+personaInput.value = currentPersona;
+function syncPersonaChips() {
+  const chips = document.querySelectorAll<HTMLButtonElement>(".persona-chip");
+  chips.forEach((c) => {
+    const key = c.dataset.persona;
+    const active = !!key && PERSONAS[key] === currentPersona;
+    c.classList.toggle("active", active);
+  });
+}
+syncPersonaChips();
+
+settingsBtn.onclick = openSettings;
+settingsClose.onclick = closeSettings;
+settingsOverlay.onclick = closeSettings;
+
+// 音色切换
+voiceSelect.onchange = () => {
+  currentVoice = voiceSelect.value;
+  saveSetting("voice", currentVoice);
+  // 如果正在对话，重新发 session.update 应用新音色
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    sendSessionUpdate();
+  }
+};
+
+// 人设预设切换
+const personaChips = document.querySelectorAll<HTMLButtonElement>(".persona-chip");
+personaChips.forEach((chip) => {
+  chip.onclick = () => {
+    const key = chip.dataset.persona;
+    if (!key || !PERSONAS[key]) return;
+    currentPersona = PERSONAS[key];
+    personaInput.value = currentPersona;
+    saveSetting("persona", currentPersona);
+    syncPersonaChips();
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      sendSessionUpdate();
+    }
+  };
+});
+
+// 自定义人设文本编辑
+personaInput.onchange = () => {
+  currentPersona = personaInput.value.trim() || PERSONAS[DEFAULT_PERSONA_KEY];
+  saveSetting("persona", currentPersona);
+  syncPersonaChips();
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    sendSessionUpdate();
+  }
+};
+
+// 清空记忆
+clearMemoryBtn.onclick = async () => {
+  if (!confirm("确定要清空小趴的记忆吗？")) return;
+  summary = "";
+  recentTurns = [];
+  sessionTurns = [];
+  await saveSummary("");
+  await saveRecentTurns([]);
+  showBubble("小趴的记忆已经清空啦～");
 };
 
 // 页面关闭容器：尝试把未结算的对话做摘要（best-effort）

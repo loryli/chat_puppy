@@ -12,6 +12,7 @@
       <header class="brand">
         <span class="brand-icon">🐾</span>
         <span class="brand-name">chat_puppy</span>
+        <button id="settings-btn" class="settings-btn" title="设置">⚙️</button>
       </header>
 
       <!-- 中央角色展示区 -->
@@ -37,6 +38,40 @@
         </button>
       </footer>
     </div>
+
+    <!-- 设置抽屉 -->
+    <div id="settings-overlay" class="settings-overlay hidden"></div>
+    <aside id="settings-panel" class="settings-panel hidden">
+      <div class="settings-header">
+        <h2>设置</h2>
+        <button id="settings-close" class="settings-close">✕</button>
+      </div>
+
+      <div class="settings-body">
+        <!-- 音色 -->
+        <section class="settings-group">
+          <label class="settings-label" for="voice-select">音色</label>
+          <select id="voice-select" class="settings-select"></select>
+        </section>
+
+        <!-- 人设 -->
+        <section class="settings-group">
+          <label class="settings-label">人设</label>
+          <div class="persona-presets">
+            <button class="persona-chip" data-persona="cute">软萌治愈</button>
+            <button class="persona-chip" data-persona="energetic">元气活泼</button>
+            <button class="persona-chip" data-persona="tsundere">傲娇</button>
+          </div>
+          <textarea id="persona-input" class="settings-textarea" rows="5" placeholder="自定义小趴的人设…"></textarea>
+        </section>
+
+        <!-- 清空记忆 -->
+        <section class="settings-group">
+          <button id="clear-memory" class="btn-danger">清空对话记忆</button>
+        </section>
+      </div>
+    </aside>
+
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
