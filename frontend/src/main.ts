@@ -10,6 +10,15 @@
 
 import { Avatar } from "./avatar";
 import "./style.css";
+import {
+  loadSummary,
+  saveSummary,
+  loadRecentTurns,
+  saveRecentTurns,
+  buildMemoryContext,
+  pushTurn,
+  type Turn,
+} from "./memory";
 
 const BACKEND_WS = "ws://localhost:8787/ws";
 
@@ -27,6 +36,13 @@ let inputCtx: AudioContext | null = null; // 采集端（16k）
 let outputCtx: AudioContext | null = null; // 播放端（24k）
 let aiSpeaking = false;
 let starting = false;
+
+// ---- 记忆状态 ----
+let summary = ""; // 长期摘要
+let recentTurns: Turn[] = []; // 最近 3 轮（持久化）
+let sessionTurns: Turn[] = []; // 本次会话所有轮次（用于结算摘要）
+let currentUserText = ""; // 当前轮用户说的话（含转写）
+let currentAiText = ""; // 当前轮 AI 回复
 
 // 播放队列
 const playQueue: Float32Array<ArrayBuffer>[] = [];
@@ -136,13 +152,21 @@ function send(obj: unknown) {
 
 // ---- 会话配置 ----
 function sendSessionUpdate() {
+  const baseInstructions =
+    "你是一只软萌治愈系的 Q 版小宠物，名叫「小趴」。说话温柔、爱撒娇，但要认真回应用户说话的内容，不要只是敷衍地‘嗯嗯’。用简短自然的中文回应，像朋友一样陪伴用户。每次都要接住用户的话。";
+
+  // 把历史记忆拼进 instructions
+  const memoryCtx = buildMemoryContext(summary, recentTurns);
+  const instructions = memoryCtx
+    ? `${baseInstructions}\n\n${memoryCtx}`
+    : baseInstructions;
+
   send({
     type: "session.update",
     session: {
       modalities: ["text", "audio"],
       input_audio_transcription: { model: "qwen3-asr-flash-realtime" },
-      instructions:
-        "你是一只软萌治愈系的 Q 版小宠物，名叫「小趴」。说话温柔、爱撒娇，但要认真回应用户说话的内容，不要只是敷衍地‘嗯嗯’。用简短自然的中文回应，像朋友一样陪伴用户。每次都要接住用户的话。",
+      instructions,
       turn_detection: {
         type: "server_vad",
         threshold: 0.5,
@@ -188,14 +212,31 @@ function handleEvent(obj: any) {
       avatar.setState("speaking");
       playPcm(obj.delta);
       break;
+    case "conversation.item.input_audio_transcription.completed":
+      // 用户说的话转写完成
+      if (obj.transcript) currentUserText = obj.transcript;
+      break;
     case "response.audio_transcript.done":
       showBubble(obj.transcript);
+      currentAiText = obj.transcript || "";
       break;
     case "response.done":
       aiSpeaking = false;
       nextPlayTime = 0;
       setStatus("待机中", false);
       avatar.setState("idle");
+      // 记录本轮对话（用户话 + AI 回复），维护滑动窗口
+      if (currentUserText || currentAiText) {
+        const turn: Turn = {
+          user: currentUserText || "（语音）",
+          ai: currentAiText || "（无文字）",
+        };
+        sessionTurns.push(turn);
+        recentTurns = pushTurn(recentTurns, turn);
+        saveRecentTurns(recentTurns);
+        currentUserText = "";
+        currentAiText = "";
+      }
       break;
     case "error":
       setStatus("出错了", false);
@@ -233,11 +274,45 @@ async function setupMic() {
   };
 }
 
+// ---- 摘要结算（会话结束时调用，把本次对话并入长期摘要）----
+async function finalizeSummary() {
+  if (sessionTurns.length === 0) return;
+  // 把本次会话所有轮次拼成文本
+  const text = sessionTurns
+    .map((t) => `用户：${t.user}\n小趴：${t.ai}`)
+    .join("\n");
+
+  // 暂存本次轮次，避免摘要失败丢失
+  sessionTurns = [];
+
+  try {
+    const resp = await fetch("http://localhost:8787/api/summarize", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text, oldSummary: summary }),
+    });
+    if (resp.ok) {
+      const data = await resp.json();
+      if (data.summary) {
+        summary = data.summary;
+        await saveSummary(summary);
+      }
+    }
+  } catch (e) {
+    console.error("摘要失败:", e);
+  }
+}
+
 // ---- 开始/停止 ----
 async function start() {
   if (starting || ws) return;
   starting = true;
   try {
+    // 加载记忆（摘要 + 最近几轮）
+    summary = await loadSummary();
+    recentTurns = await loadRecentTurns();
+    sessionTurns = [];
+
     ensureOutputCtx();
     if (outputCtx && outputCtx.state === "suspended") {
       await outputCtx.resume();
@@ -261,6 +336,9 @@ async function start() {
 }
 
 function stop() {
+  // 会话结束：先做摘要结算
+  finalizeSummary();
+
   micStream?.getTracks().forEach((t) => t.stop());
   micStream = null;
   micWorklet?.disconnect();
@@ -289,4 +367,24 @@ startBtn.onclick = () => {
 stopBtn.onclick = () => {
   stop();
 };
+
+// 页面关闭容器：尝试把未结算的对话做摘要（best-effort）
+window.addEventListener("beforeunload", () => {
+  if (sessionTurns.length > 0) {
+    // 用 navigator.sendBeacon 或同步 fetch 尽力保持（可能来不及，但尽量）
+    const text = sessionTurns
+      .map((t) => `用户：${t.user}\n小趴：${t.ai}`)
+      .join("\n");
+    try {
+      navigator.sendBeacon(
+        "http://localhost:8787/api/summarize",
+        new Blob([JSON.stringify({ text, oldSummary: summary })], {
+          type: "application/json",
+        })
+      );
+    } catch (e) {
+      /* 忽略 */
+    }
+  }
+});
 

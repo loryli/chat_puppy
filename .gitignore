@@ -3,3 +3,9 @@ node_modules/
 *.log
 dist/
 .DS_Store
+
+# Playwright MCP 调试产物
+.playwright-mcp/
+
+# 原始角色图（前端实际用 frontend/public/character.png）
+q版👤.png
