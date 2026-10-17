@@ -67,17 +67,18 @@ export async function saveRecentTurns(turns: Turn[]): Promise<void> {
   await set("recentTurns", turns);
 }
 
-// 把历史拼成一段「背景文本」，用于注入 instructions
+// 把「用户画像」和「最近几轮」拼成一段背景文本，用于注入 instructions
+// 注意：这里只注入「关于用户的信息」，不含小趴自身的人设（人设由系统提示词规定）
 export function buildMemoryContext(summary: string, turns: Turn[]): string {
   const parts: string[] = [];
   if (summary) {
-    parts.push(`【你们之前的对话摘要】${summary}`);
+    parts.push(`【关于用户的历史信息】（仅作参考，勿当成你的自我定义）\n${summary}`);
   }
   if (turns.length > 0) {
     const recent = turns
       .map((t) => `用户：${t.user}\n小趴：${t.ai}`)
       .join("\n");
-    parts.push(`【最近几轮的对话】\n${recent}`);
+    parts.push(`【最近几轮对话】（仅供上下文连贯，不改变你的人设）\n${recent}`);
   }
   return parts.join("\n\n");
 }

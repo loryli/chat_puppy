@@ -201,10 +201,10 @@ function send(obj: unknown) {
 function sendSessionUpdate() {
   const baseInstructions = currentPersona || PERSONAS[DEFAULT_PERSONA_KEY];
 
-  // 把历史记忆拼进 instructions
+  // 把历史记忆拼进 instructions（人设在前、用户记忆在后，边界清晰）
   const memoryCtx = buildMemoryContext(summary, recentTurns);
   const instructions = memoryCtx
-    ? `${baseInstructions}\n\n${memoryCtx}`
+    ? `${baseInstructions}\n\n---\n${memoryCtx}`
     : baseInstructions;
 
   send({
@@ -340,8 +340,13 @@ async function finalizeSummary() {
     if (resp.ok) {
       const data = await resp.json();
       if (data.summary) {
-        summary = data.summary;
-        await saveSummary(summary);
+        const s = data.summary.trim();
+        // 豆包返回「无」（或带空格）表示本次没有值得记的长期信息，保留旧摘要
+        const isNoNewInfo = s === "无" || s === "无。" || s.length <= 2;
+        if (s && !isNoNewInfo) {
+          summary = s;
+          await saveSummary(summary);
+        }
       }
     }
   } catch (e) {
